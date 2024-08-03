@@ -2,6 +2,8 @@
 
 import React, { useEffect } from 'react';
 
+export const maxDuration = '300';
+
 export default function Home() {
   useEffect(() => {
     const recognizeSpeech = async () => {

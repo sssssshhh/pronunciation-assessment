@@ -6,7 +6,7 @@ import Cors from 'cors';
 // CORS 미들웨어 초기화
 const cors = Cors({
     methods: ['GET', 'POST', 'OPTIONS'],
-    origin: '*', // 필요한 경우 특정 도메인만 허용할 수 있습니다.
+    origin: '*', // 필요에 따라 특정 도메인만 허용할 수 있습니다.
 });
 
 // CORS 미들웨어를 API 핸들러에 적용하는 유틸리티 함수
@@ -99,9 +99,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         } catch (error) {
             console.error('Error during the process:', error);
+            // JSON 형식으로 에러 메시지 반환
             res.status(500).json({ error: 'An error occurred during the pronunciation assessment process.' });
         }
     } else {
+        // 잘못된 HTTP 메소드에 대한 응답
         res.status(405).json({ message: 'Method not allowed' });
     }
 }
