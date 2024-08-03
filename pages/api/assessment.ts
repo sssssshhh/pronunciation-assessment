@@ -1,12 +1,31 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as sdk from "microsoft-cognitiveservices-speech-sdk";
 import axios from 'axios';
+import Cors from 'cors';
+
+const cors = Cors({
+    methods: ['GET', 'POST', 'OPTIONS'],
+    origin: '*',
+});
+
+function runMiddleware(req: NextApiRequest, res: NextApiResponse, fn: Function) {
+    return new Promise((resolve, reject) => {
+        fn(req, res, (result: any) => {
+            if (result instanceof Error) {
+                return reject(result);
+            }
+            return resolve(result);
+        });
+    });
+}
 
 const subscriptionKey = "09afab133e2440259510550c65aeb40a";
 const serviceRegion = "eastus";
 const fileUrl = "https://bandy-contents.s3.ap-northeast-1.amazonaws.com/test.wav"; // S3 URL
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    await runMiddleware(req, res, cors);
+
     if (req.method === 'POST') {
         try {
             console.log('Fetching audio file from S3...');
