@@ -3,11 +3,13 @@ import * as sdk from "microsoft-cognitiveservices-speech-sdk";
 import axios from 'axios';
 import Cors from 'cors';
 
+// CORS 미들웨어 초기화
 const cors = Cors({
     methods: ['GET', 'POST', 'OPTIONS'],
-    origin: '*',
+    origin: '*', // 필요한 경우 특정 도메인만 허용할 수 있습니다.
 });
 
+// CORS 미들웨어를 API 핸들러에 적용하는 유틸리티 함수
 function runMiddleware(req: NextApiRequest, res: NextApiResponse, fn: Function) {
     return new Promise((resolve, reject) => {
         fn(req, res, (result: any) => {
@@ -24,6 +26,7 @@ const serviceRegion = "eastus";
 const fileUrl = "https://bandy-contents.s3.ap-northeast-1.amazonaws.com/test.wav"; // S3 URL
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    // CORS 미들웨어 적용
     await runMiddleware(req, res, cors);
 
     if (req.method === 'POST') {
@@ -58,39 +61,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 text: "",
             };
 
-            reco.recognized = function (s, e) {
-                const pronunciation_result = sdk.PronunciationAssessmentResult.fromResult(e.result);
-                recognitionResult.accuracyScore = pronunciation_result.accuracyScore;
-                recognitionResult.fluencyScore = pronunciation_result.fluencyScore;
-                recognitionResult.compScore = pronunciation_result.completenessScore;
-                recognitionResult.prosodyScore = pronunciation_result.pronunciationScore;
-                recognitionResult.text = e.result.text;
+            // 비동기적으로 음성 인식 처리
+            const recognitionPromise = new Promise<void>((resolve, reject) => {
+                reco.recognized = (s, e) => {
+                    const pronunciation_result = sdk.PronunciationAssessmentResult.fromResult(e.result);
+                    recognitionResult.accuracyScore = pronunciation_result.accuracyScore;
+                    recognitionResult.fluencyScore = pronunciation_result.fluencyScore;
+                    recognitionResult.compScore = pronunciation_result.completenessScore;
+                    recognitionResult.prosodyScore = pronunciation_result.pronunciationScore;
+                    recognitionResult.text = e.result.text;
+                };
 
-                console.log('Recognition result:', recognitionResult);
-            };
+                reco.canceled = (s, e) => {
+                    if (e.reason === sdk.CancellationReason.Error) {
+                        console.error("Cancellation reason: ", e.errorDetails);
+                        reject(new Error('An error occurred during the pronunciation assessment process.'));
+                    }
+                    reco.stopContinuousRecognitionAsync();
+                };
 
-            reco.canceled = function (s, e) {
-                if (e.reason === sdk.CancellationReason.Error) {
-                    console.error("Cancellation reason: ", e.errorDetails);
-                }
-                reco.stopContinuousRecognitionAsync();
-            };
+                reco.sessionStopped = (s, e) => {
+                    console.log('Session stopped, sending result back to client...');
+                    reco.stopContinuousRecognitionAsync();
+                    reco.close();
+                    resolve();
+                };
 
-            reco.sessionStopped = function (s, e) {
-                console.log('Session stopped, sending result back to client...');
-                reco.stopContinuousRecognitionAsync();
-                reco.close();
-                res.status(200).json(recognitionResult);
-            };
-
-            // Start the recognition process
-            console.log('Starting recognition process...');
-            await new Promise<void>((resolve, reject) => {
                 reco.startContinuousRecognitionAsync(
-                    () => resolve(), // Resolve promise when recognition starts
-                    (err) => reject(err) // Reject promise if there is an error
+                    () => { }, // Recognition started
+                    (err) => reject(err) // Error during recognition start
                 );
             });
+
+            // 음성 인식 결과 기다리기
+            await recognitionPromise;
+            res.status(200).json(recognitionResult);
 
         } catch (error) {
             console.error('Error during the process:', error);
