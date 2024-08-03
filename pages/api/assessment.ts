@@ -29,6 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // CORS 미들웨어 적용
     await runMiddleware(req, res, cors);
 
+
     if (req.method === 'POST') {
         try {
             console.log('Fetching audio file from S3...');

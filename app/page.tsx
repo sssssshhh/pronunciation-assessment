@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 
-export const maxDuration = '300';
+export const maxDuration = 300;
 
 export default function Home() {
   useEffect(() => {
