@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as sdk from "microsoft-cognitiveservices-speech-sdk";
+import atob from 'atob';
+import { Buffer } from 'buffer';
 
 const subscriptionKey = "09afab133e2440259510550c65aeb40a";
 const serviceRegion = "eastus";
@@ -8,10 +10,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'POST') {
         try {
             // 요청 본문에서 audioBuffer 가져오기
-            const audioBuffer = req.body;
+            const base64Audio = req.body.audio;
+
+            // Base64를 Buffer로 변환
+            const binaryAudio = Buffer.from(base64Audio, 'base64');
 
             // 음성 인식 구성
-            const audioConfig = sdk.AudioConfig.fromWavFileInput(audioBuffer);
+            const audioConfig = sdk.AudioConfig.fromWavFileInput(binaryAudio);
             const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey, serviceRegion);
             const referenceText = "나는 오늘 학교에 감";
             const pronunciationAssessmentConfig = new sdk.PronunciationAssessmentConfig(
