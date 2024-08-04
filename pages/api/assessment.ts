@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as sdk from "microsoft-cognitiveservices-speech-sdk";
-import atob from 'atob';
 import { Buffer } from 'buffer';
 
 const subscriptionKey = "09afab133e2440259510550c65aeb40a";
@@ -9,11 +8,15 @@ const serviceRegion = "eastus";
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'POST') {
         try {
-            // 요청 본문에서 audioBuffer 가져오기
+            // 요청 본문에서 audio 가져오기
             const base64Audio = req.body.audio;
 
             // Base64를 Buffer로 변환
             const binaryAudio = Buffer.from(base64Audio, 'base64');
+
+            if (!Buffer.isBuffer(binaryAudio)) {
+                throw new Error("Failed to convert audio data to Buffer.");
+            }
 
             // 음성 인식 구성
             const audioConfig = sdk.AudioConfig.fromWavFileInput(binaryAudio);
@@ -78,11 +81,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         } catch (error) {
             console.error('Error during the process:', error);
-            // JSON 형식으로 에러 메시지 반환
             res.status(500).json({ error: 'An error occurred during the pronunciation assessment process.' });
         }
     } else {
-        // 잘못된 HTTP 메소드에 대한 응답
         res.status(405).json({ message: 'Method not allowed' });
     }
 }
