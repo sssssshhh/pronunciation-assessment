@@ -1,48 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as sdk from "microsoft-cognitiveservices-speech-sdk";
-import axios from 'axios';
-import Cors from 'cors';
-
-// CORS 미들웨어 초기화
-const cors = Cors({
-    methods: ['GET', 'POST', 'OPTIONS'],
-    origin: '*', // 필요에 따라 특정 도메인만 허용할 수 있습니다.
-});
-
-// CORS 미들웨어를 API 핸들러에 적용하는 유틸리티 함수
-function runMiddleware(req: NextApiRequest, res: NextApiResponse, fn: Function) {
-    return new Promise((resolve, reject) => {
-        fn(req, res, (result: any) => {
-            if (result instanceof Error) {
-                return reject(result);
-            }
-            return resolve(result);
-        });
-    });
-}
 
 const subscriptionKey = "09afab133e2440259510550c65aeb40a";
 const serviceRegion = "eastus";
-const fileUrl = "https://bandy-contents.s3.ap-northeast-1.amazonaws.com/test.wav"; // S3 URL
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    // CORS 미들웨어 적용
-    await runMiddleware(req, res, cors);
-
-
     if (req.method === 'POST') {
         try {
-            console.log('Fetching audio file from S3...');
-            const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-            const audioBuffer = response.data;
+            // 요청 본문에서 audioBuffer 가져오기
+            const audioBuffer = req.body;
 
-            console.log('Audio file fetched successfully. Preparing recognition...');
-
+            // 음성 인식 구성
             const audioConfig = sdk.AudioConfig.fromWavFileInput(audioBuffer);
             const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey, serviceRegion);
-            const reference_text = "나는 오늘 학교에 감";
+            const referenceText = "나는 오늘 학교에 감";
             const pronunciationAssessmentConfig = new sdk.PronunciationAssessmentConfig(
-                reference_text,
+                referenceText,
                 sdk.PronunciationAssessmentGradingSystem.HundredMark,
                 sdk.PronunciationAssessmentGranularity.Phoneme,
                 true
