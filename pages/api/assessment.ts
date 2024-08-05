@@ -8,12 +8,13 @@ const serviceRegion = "eastus";
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'POST') {
         try {
+            console.log("req.body.audio: ", req.body.audio);
             // 요청 본문에서 audio 가져오기
             const base64Audio = req.body.audio;
-
+            console.log("base64Audio: ", base64Audio);
             // Base64를 Buffer로 변환
             const binaryAudio = Buffer.from(base64Audio, 'base64');
-
+            console.log("binaryAudio: ", binaryAudio);
             if (binaryAudio.length < 44 || binaryAudio.toString('ascii', 0, 4) !== 'RIFF') {
                 throw new Error("Invalid WAV file.");
             }
