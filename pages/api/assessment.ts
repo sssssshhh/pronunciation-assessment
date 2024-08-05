@@ -14,6 +14,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Base64를 Buffer로 변환
             const binaryAudio = Buffer.from(base64Audio, 'base64');
 
+            if (binaryAudio.length < 44 || binaryAudio.toString('ascii', 0, 4) !== 'RIFF') {
+                throw new Error("Invalid WAV file.");
+            }
+
             if (!Buffer.isBuffer(binaryAudio)) {
                 throw new Error("Failed to convert audio data to Buffer.");
             }
