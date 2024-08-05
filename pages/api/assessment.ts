@@ -18,13 +18,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             if (binaryAudio.length < 44 || binaryAudio.toString('ascii', 0, 4) !== 'RIFF') {
                 throw new Error("Invalid WAV file.");
             }
-
+            console.log("1");
             if (!Buffer.isBuffer(binaryAudio)) {
                 throw new Error("Failed to convert audio data to Buffer.");
             }
-
+            console.log("2");
             // 음성 인식 구성
             const audioConfig = sdk.AudioConfig.fromWavFileInput(binaryAudio);
+            console.log("3");
             const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey, serviceRegion);
             const referenceText = "나는 오늘 학교에 감";
             const pronunciationAssessmentConfig = new sdk.PronunciationAssessmentConfig(
@@ -47,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 prosodyScore: 0,
                 text: "",
             };
-
+            console.log("4");
             // 비동기적으로 음성 인식 처리
             const recognitionPromise = new Promise<void>((resolve, reject) => {
                 reco.recognized = (s, e) => {
