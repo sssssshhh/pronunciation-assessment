@@ -15,7 +15,11 @@ const serviceRegion = 'eastus';
 
 // formidable의 'parse' 함수를 Promise로 변환
 const parseForm = promisify((req: NextApiRequest, callback: (err: any, fields: any, files: any) => void) => {
-    const form = new IncomingForm();
+    const form = new IncomingForm({
+        keepExtensions: true, // 파일 확장자를 유지
+        multiples: false, // 멀티 파일 업로드를 비활성화
+        uploadDir: '/tmp', // 파일이 임시로 저장될 경로
+    });
     form.parse(req, callback);
 });
 
@@ -28,24 +32,23 @@ export const config = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'POST') {
         try {
-            console.log(req);
             const { files } = await parseForm(req) as FormData;
-            console.log("file", files);
+            console.log("files: ", files);
             const audioFile = files.audio as File;
 
             if (!audioFile) {
                 throw new Error('Audio file not found.');
             }
-            console.log("audioFile");
+
             const audioPath = audioFile.filepath;
-            console.log("binaryAudio");
+            console.log("audioPath: ", audioPath);
             // 오디오 파일을 읽어서 Buffer로 변환
             const binaryAudio = fs.readFileSync(audioPath);
-
+            console.log("binaryAudio: ", binaryAudio);
             if (binaryAudio.length < 44 || binaryAudio.toString('ascii', 0, 4) !== 'RIFF') {
                 throw new Error('Invalid WAV file.');
             }
-            console.log("audioConfig");
+
             // 음성 인식 구성
             const audioConfig = sdk.AudioConfig.fromWavFileInput(binaryAudio);
             const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey, serviceRegion);
@@ -59,7 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             pronunciationAssessmentConfig.enableProsodyAssessment = true;
 
             speechConfig.speechRecognitionLanguage = 'ko-KR';
-            console.log("reco");
+
             const reco = new sdk.SpeechRecognizer(speechConfig, audioConfig);
             pronunciationAssessmentConfig.applyTo(reco);
 
@@ -70,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 prosodyScore: 0,
                 text: '',
             };
-            console.log("recognitionPromise");
+
             // 비동기적으로 음성 인식 처리
             const recognitionPromise = new Promise<void>((resolve, reject) => {
                 reco.recognized = (s, e) => {
