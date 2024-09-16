@@ -28,9 +28,9 @@ export const config = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'POST') {
         try {
-            // Formidable로 멀티파트 데이터 처리
+            console.log(req);
             const { files } = await parseForm(req) as FormData;
-            console.log(files);
+            console.log("file", files);
             const audioFile = files.audio as File;
 
             if (!audioFile) {
