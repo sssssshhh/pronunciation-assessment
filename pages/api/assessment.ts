@@ -30,21 +30,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         try {
             // Formidable로 멀티파트 데이터 처리
             const { files } = await parseForm(req) as FormData;
+            console.log(files);
             const audioFile = files.audio as File;
 
             if (!audioFile) {
                 throw new Error('Audio file not found.');
             }
-
+            console.log("audioFile");
             const audioPath = audioFile.filepath;
-
+            console.log("binaryAudio");
             // 오디오 파일을 읽어서 Buffer로 변환
             const binaryAudio = fs.readFileSync(audioPath);
 
             if (binaryAudio.length < 44 || binaryAudio.toString('ascii', 0, 4) !== 'RIFF') {
                 throw new Error('Invalid WAV file.');
             }
-
+            console.log("audioConfig");
             // 음성 인식 구성
             const audioConfig = sdk.AudioConfig.fromWavFileInput(binaryAudio);
             const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey, serviceRegion);
@@ -58,7 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             pronunciationAssessmentConfig.enableProsodyAssessment = true;
 
             speechConfig.speechRecognitionLanguage = 'ko-KR';
-
+            console.log("reco");
             const reco = new sdk.SpeechRecognizer(speechConfig, audioConfig);
             pronunciationAssessmentConfig.applyTo(reco);
 
@@ -69,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 prosodyScore: 0,
                 text: '',
             };
-
+            console.log("recognitionPromise");
             // 비동기적으로 음성 인식 처리
             const recognitionPromise = new Promise<void>((resolve, reject) => {
                 reco.recognized = (s, e) => {
