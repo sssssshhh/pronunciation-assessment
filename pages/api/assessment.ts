@@ -1,60 +1,38 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
-import { IncomingForm, File } from 'formidable';
-import fs from 'fs';
-import { promisify } from 'util';
-
-// Formidable의 'parse' 메서드에서 반환되는 타입 정의
-interface FormData {
-    fields: { [key: string]: any };
-    files: { [key: string]: File | File[] };
-}
+import axios from 'axios';
 
 const subscriptionKey = '09afab133e2440259510550c65aeb40a';
 const serviceRegion = 'eastus';
 
-// formidable의 'parse' 함수를 Promise로 변환
-const parseForm = promisify((req: NextApiRequest, callback: (err: any, fields: any, files: any) => void) => {
-    const form = new IncomingForm({
-        keepExtensions: true, // 파일 확장자를 유지
-        multiples: false, // 멀티 파일 업로드를 비활성화
-        uploadDir: '/tmp', // 파일이 임시로 저장될 경로
-    });
-    form.parse(req, callback);
-});
-
-export const config = {
-    api: {
-        bodyParser: false, // Next.js의 기본 bodyParser를 비활성화합니다.
-    },
-};
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'POST') {
+        console.log(req.body);
         try {
-            const { files } = await parseForm(req) as FormData;
-            console.log("files: ", files);
-            const audioFile = files.audio as File;
+            const { referenceText } = req.body;
+            const { fileName } = req.body;
 
-            if (!audioFile) {
-                throw new Error('Audio file not found.');
+            if (!referenceText) {
+                return res.status(400).json({ error: 'referenceText 파라미터가 필요합니다.' });
             }
 
-            const audioPath = audioFile.filepath;
-            console.log("audioPath: ", audioPath);
-            // 오디오 파일을 읽어서 Buffer로 변환
-            const binaryAudio = fs.readFileSync(audioPath);
-            console.log("binaryAudio: ", binaryAudio);
-            if (binaryAudio.length < 44 || binaryAudio.toString('ascii', 0, 4) !== 'RIFF') {
-                throw new Error('Invalid WAV file.');
+            if (!fileName) {
+                return res.status(400).json({ error: 'fileName 파라미터가 필요합니다.' });
             }
 
-            // 음성 인식 구성
-            const audioConfig = sdk.AudioConfig.fromWavFileInput(binaryAudio);
+            const s3Url = `https://bandy-recording.s3.ap-northeast-1.amazonaws.com/${fileName}`;
+
+            const response = await axios.get(s3Url, {
+                responseType: 'arraybuffer',
+            });
+
+            const audioData = Buffer.from(response.data, 'binary');
+            const audioConfig = sdk.AudioConfig.fromWavFileInput(audioData);
             const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey, serviceRegion);
-            const referenceText = '나는 오늘 학교에 감';
+            const reference_text = '안녕하세요';
+
             const pronunciationAssessmentConfig = new sdk.PronunciationAssessmentConfig(
-                referenceText,
+                reference_text,
                 sdk.PronunciationAssessmentGradingSystem.HundredMark,
                 sdk.PronunciationAssessmentGranularity.Phoneme,
                 true
@@ -66,53 +44,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const reco = new sdk.SpeechRecognizer(speechConfig, audioConfig);
             pronunciationAssessmentConfig.applyTo(reco);
 
-            const recognitionResult = {
-                accuracyScore: 0,
-                fluencyScore: 0,
-                compScore: 0,
-                prosodyScore: 0,
-                text: '',
+            reco.recognized = function (s, e) {
+                //console.log(res);
+                const pronunciation_result = sdk.PronunciationAssessmentResult.fromResult(e.result);
+                console.log('Accuracy score: ', pronunciation_result.accuracyScore);
+                console.log('Pronunciation score: ', pronunciation_result.pronunciationScore);
+                console.log('Completeness score: ', pronunciation_result.completenessScore);
+                console.log('Fluency score: ', pronunciation_result.fluencyScore);
+
+                // 비동기 작업이 완료되었으므로 응답을 보냅니다.
+                res.status(200).json({
+                    accuracyScore: pronunciation_result.accuracyScore,
+                    pronunciationScore: pronunciation_result.pronunciationScore,
+                    completenessScore: pronunciation_result.completenessScore,
+                    fluencyScore: pronunciation_result.fluencyScore,
+                });
+
+                reco.stopContinuousRecognitionAsync();
             };
 
-            // 비동기적으로 음성 인식 처리
-            const recognitionPromise = new Promise<void>((resolve, reject) => {
-                reco.recognized = (s, e) => {
-                    const pronunciation_result = sdk.PronunciationAssessmentResult.fromResult(e.result);
-                    recognitionResult.accuracyScore = pronunciation_result.accuracyScore;
-                    recognitionResult.fluencyScore = pronunciation_result.fluencyScore;
-                    recognitionResult.compScore = pronunciation_result.completenessScore;
-                    recognitionResult.prosodyScore = pronunciation_result.pronunciationScore;
-                    recognitionResult.text = e.result.text;
-                };
+            reco.canceled = function (s, e) {
+                if (e.reason === sdk.CancellationReason.Error) {
+                    console.error('Cancellation Error:', e.errorDetails);
+                    res.status(500).json({ error: e.errorDetails });
+                } else {
+                    res.status(500).json({ error: 'Recognition was canceled.' });
+                }
+                reco.stopContinuousRecognitionAsync();
+            };
 
-                reco.canceled = (s, e) => {
-                    if (e.reason === sdk.CancellationReason.Error) {
-                        console.error('Cancellation reason: ', e.errorDetails);
-                        reject(new Error('An error occurred during the pronunciation assessment process.'));
-                    }
-                    reco.stopContinuousRecognitionAsync();
-                };
+            reco.sessionStopped = function (s, e) {
+                reco.stopContinuousRecognitionAsync();
+                reco.close();
+            };
 
-                reco.sessionStopped = (s, e) => {
-                    console.log('Session stopped, sending result back to client...');
-                    reco.stopContinuousRecognitionAsync();
-                    reco.close();
-                    resolve();
-                };
-
-                reco.startContinuousRecognitionAsync(
-                    () => { }, // Recognition started
-                    (err) => reject(err) // Error during recognition start
-                );
-            });
-
-            // 음성 인식 결과 기다리기
-            await recognitionPromise;
-            res.status(200).json(recognitionResult);
-
+            reco.startContinuousRecognitionAsync();
         } catch (error) {
-            console.error('Error during the process:', error);
-            res.status(500).json({ error: 'An error occurred during the pronunciation assessment process.' });
+            console.error('Error:', error);
+            return res.status(500).json({ error: '발음 평가 중 오류가 발생했습니다.' });
         }
     } else {
         res.status(405).json({ message: 'Method not allowed' });
